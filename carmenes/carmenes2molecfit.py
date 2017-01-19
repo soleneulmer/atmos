@@ -19,6 +19,7 @@ from scipy.interpolate import interp1d
 from PyAstronomy import pyasl
 # from matplotlib import cm
 from astropy.constants import c
+import time
 
 
 def corrected_overlap(wavelength_masked, flux_masked, good_overlap):
@@ -203,7 +204,7 @@ def find_continuum(wl, flux):
         threshold = mean_cont - np.sqrt(std_cont)
         # plt.plot(wl_i[idx_cont], flux_i[idx_cont], 'yo')
 
-    print 'Threshold at: ', threshold
+    #print 'Threshold at: ', threshold
 
     return threshold, mean_cont, std_cont
 
@@ -234,10 +235,10 @@ def suppress_artefact(wl, flux, jump=0.15, interact=False):
             plt.axis([artefact[0][0]-5, artefact[0][0]+5, 0, 1])
             yes = raw_input(" >> If it's an artefact, type yes: ")
             if str(yes) == 'yes':
-                print 'Deleting 5 points ... !'
+                #print 'Deleting 5 points ... !'
                 index.append((artefact[i][1]-2, artefact[i][1]-1, artefact[i][1], artefact[i][1]+1, artefact[i][1]+2))
         else:
-            print 'Deleting 5 points ... !'
+            #print 'Deleting 5 points ... !'
             index.append((artefact[i][1]-2, artefact[i][1]-1, artefact[i][1], artefact[i][1]+1, artefact[i][1]+2))
 
     new_wl = np.delete(wl, index)
@@ -299,6 +300,8 @@ def mean_spectrum(wl_right, flux_right, wl_left, flux_left, mean_cont, std_cont)
             idx_end = idx
             break
 
+    ## 300ms long...
+    ##flux_middle2 = [np.mean([fct_left(wl), fct_right(wl)]) for idx, wl in enumerate(new_wl[idx_start:idx_end+1], start=idx_start)]
     for idx, wl in enumerate(new_wl[idx_start:idx_end+1], start=idx_start):
         mean_flux = np.mean([fct_left(wl), fct_right(wl)])
         flux_middle.append(mean_flux)
@@ -365,10 +368,10 @@ class Spectrum(object):
                     self.wavelength[i] > self.wavelength[i+1][0],
                     self.wavelength[i], copy=True)
                 waves = wave_start
-                print 'First wave', waves.shape
+                #print 'First wave', waves.shape
                 if np.sum(wave_start.mask) != 0:
                     count += 1
-                    print 'How many masked elements?', np.sum(wave_start.mask)
+                    #print 'How many masked elements?', np.sum(wave_start.mask)
 
             # Last wavelength array
             elif i == self.wavelength.shape[0]-1:
@@ -376,10 +379,10 @@ class Spectrum(object):
                     self.wavelength[i] < self.wavelength[i-1][-1],
                     self.wavelength[i], copy=True)
                 waves = ma.vstack((waves, wave_end))
-                print 'Last wave', waves.shape
+                #print 'Last wave', waves.shape
                 if np.sum(wave_end.mask) != 0:
                     count += 1
-                    print 'How many masked elements?', np.sum(wave_end.mask)
+                    #print 'How many masked elements?', np.sum(wave_end.mask)
             # All the other ones
             else:
                 wave_mid = ma.masked_where(
@@ -423,6 +426,7 @@ class Spectrum(object):
         group_idx = continuous_nb_in_list(idx_true[0])
         good_overlap = []
         plt.figure(1)
+
         for i in range(nb_overlaps):
             print '\n-- Overlap nb:', i+1, '--'
             # WL after which the corrected flux should be inserted
@@ -471,9 +475,13 @@ class Spectrum(object):
         # OUTPUTS: None
         #          Write wavelength_exclude.dat file used by Molecfit
         """
-        waves = self.wavelength.flatten()
-        # Wavelength without the overlapping regions
-        waves_clean = waves.compressed()
+        if any([np.ma.is_masked(waves), np.ma.is_masked(fluxes)]):
+            waves = self.wavelength.flatten()
+            # Wavelength without the overlapping regions
+            waves_clean = waves.compressed()
+        else:
+            waves_clean = waves
+
         # Differences btw two consecutive elmts
         diff = np.ediff1d(waves_clean)
         # Mask is True when the WL are far to each other
@@ -498,10 +506,10 @@ class Spectrum(object):
             plt.plot((wranges[i][1]*10000., wranges[i][1]*10000.),
                      (-0.5, 1.5), 'b--')
 
-        plt.plot(spectrum.wavelength.flatten(), spectrum.flux.flatten(), 'g-')
-        plt.xlabel('Wavelength in microns')
-        plt.ylabel('Flux')
-        plt.title('CARMENES spectrum')
+        # plt.plot(spectrum.wavelength.flatten(), spectrum.flux.flatten(), 'g-')
+        # plt.xlabel('Wavelength in microns')
+        # plt.ylabel('Flux')
+        # plt.title('CARMENES spectrum')
         return None
 
     def wrange_include(self, h2o=True, o2=False, co2=True, ch4=False):
@@ -538,14 +546,21 @@ class Spectrum(object):
 
         return None
 
-    def input_molecfit(self):
+    def input_molecfit(self, wl=[], flux=[]):
         # Creates an input file readable for Molecfit
-        # Bin Table with data
-        tb_hdu = fits.BinTableHDU.from_columns(
-            [fits.Column(name='WAVE', format='1D', array=self.wavelength.flatten()),
-             fits.Column(name='SPEC', format='1D', array=self.flux.flatten()),
-             fits.Column(name='CONT', format='1D', array=self.cont.flatten()),
-             fits.Column(name='SIG', format='1D', array=self.non_corr_flux.flatten())])
+        if any([wl.size == 0, flux.size == 0]):
+            # Bin Table with data
+            tb_hdu = fits.BinTableHDU.from_columns(
+                [fits.Column(name='WAVE', format='1D', array=self.wavelength.flatten()),
+                 fits.Column(name='SPEC', format='1D', array=self.flux.flatten()),
+                 fits.Column(name='CONT', format='1D', array=self.cont.flatten()),
+                 fits.Column(name='SIG', format='1D', array=self.non_corr_flux.flatten())])
+        else:
+            tb_hdu = fits.BinTableHDU.from_columns(
+                [fits.Column(name='WAVE', format='1D', array=wl),
+                 fits.Column(name='SPEC', format='1D', array=flux),
+                 fits.Column(name='CONT', format='1D', array=self.cont.flatten()),
+                 fits.Column(name='SIG', format='1D', array=self.non_corr_flux.flatten())])
 
         # Header
         head_hdu = fits.PrimaryHDU(header=self.header)
@@ -556,52 +571,35 @@ class Spectrum(object):
 
         return None
 
-
-    # def estimate_snr(self):
-    #     print('SNR calculation ...')
-    #     mean = np.mean([self.flux[i] for i in range(self.wavelength.shape[0])])
-    #     std = np.std([self.flux[i] for i in range(self.wavelength.shape[0])])
-    #     print('snr =', mean / std)
-    #     return mean / std
-    #     # can use self.wave, self.flux
-    #     # does the plot
-
-
-class Uves(Spectrum):
-    pass
-
-
-def add(a, b, minus=False):
-    if b is not None:
-        if minus:
-            return a-sum(b)
-        return a + sum(b)
-    else:
-        return a
-
-
-# @Gooey(default_size=(610, 710))
-# def arguments():
-#     parser = argparse.ArgumentParser(description='Simple calculator.')
-#     parser.add_argument('a', help='First number to add', type=float)
-#     parser.add_argument('--extra', '-e', help='Second number to add',
-#                         type=float, nargs='+')
-#     parser.add_argument('--minus', '-m', help='Switch to subtraction',
-#                         default=False, action="store_true")
-
-#     args = parser.parse_args()
-#     return args
-
 if __name__ == "__main__":
 
     # Create Spectrum object from filename
+    t0 = time.time()
+    
     filename = 'car-20160420T20h45m44s-sci-cabj-nir_A.fits'
     filename2 = 'car-20160420T20h26m49s-sci-cabj-nir_A.fits'
+
     spectrum10 = Spectrum.from_file(filename)
     spectrum11 = Spectrum.from_file(filename2)
-    
+
     # Mask the overlaps
     wavelength_masked, flux_masked, nb_overlaps, mask = Spectrum.mask_overlap_rgn(spectrum10)
 
     # Correct the overlaps
     wl, flux = Spectrum.treat_overlap(spectrum10, wavelength_masked, flux_masked, nb_overlaps)
+
+    t1 = time.time()
+    
+    print 'Time for correcting overlap', t1-t0
+    # Delete artefact on the full spectrum
+    #wl_corr, flux_corr = suppress_artefact(wl, flux)
+
+    # Create input FITS file for Molecfit
+    #Spectrum.input_molecfit(spectrum10, wl_corr, flux_corr)
+
+    # Create exclusion mask for Molecfit
+    #Spectrum.wrange_exclude(spectrum10, wl_corr, flux_corr)
+
+    # Create inclusion mask for Molefit
+    # to fit by default H2O and CO2, O2 and CH4 can also be included
+    #Spectrum.wrange_include(spectrum10)
