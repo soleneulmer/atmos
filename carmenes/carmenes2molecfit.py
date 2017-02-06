@@ -232,7 +232,7 @@ def suppress_artefact(wl, flux, jump=0.15, interact=False):
             plt.figure(i+10)
             plt.plot(wl, flux, 'mo-')
             plt.title('Is it an artefact?')
-            plt.axis([artefact[0][0]-5, artefact[0][0]+5, 0, 1])
+            plt.axis([artefact[i][0]-5, artefact[i][0]+5, 0, 1])
             yes = raw_input(" >> If it's an artefact, type yes: ")
             if str(yes) == 'yes':
                 #print 'Deleting 5 points ... !'
@@ -441,8 +441,8 @@ class Spectrum(object):
             wl_right, flux_right = suppress_artefact(wl_right, flux_right, interact=False)
 
             # Plotting
-            plt.plot(wl_right, flux_right, 'k.-', label='Right')
-            plt.plot(wl_left, flux_left, 'b.-', label='Left')
+            # plt.plot(wl_right, flux_right, 'k.-', label='Right')
+            # plt.plot(wl_left, flux_left, 'b.-', label='Left')
 
             # RV shift
             if i == 0 or i == 1:
@@ -463,8 +463,8 @@ class Spectrum(object):
             #plt.legend()
 
         wl_correct, flux_correct = corrected_overlap(wavelength_masked, flux_masked, good_overlap)
-        plt.plot(wl_correct, flux_correct, 'm.--', label='Corrected spectrum')
-        plt.legend()
+        # plt.plot(wl_correct, flux_correct, 'm.--', label='Corrected spectrum')
+        # plt.legend()
 
         return wl_correct, flux_correct
 
@@ -500,11 +500,11 @@ class Spectrum(object):
             writer = csv.writer(f, delimiter=' ')
             writer.writerows(wranges)
 
-        for i in range(len(wranges)):
-            plt.plot((wranges[i][0]*10000., wranges[i][0]*10000.),
-                     (-0.5, 1.5), 'k--')
-            plt.plot((wranges[i][1]*10000., wranges[i][1]*10000.),
-                     (-0.5, 1.5), 'b--')
+        # for i in range(len(wranges)):
+        #     plt.plot((wranges[i][0]*10000., wranges[i][0]*10000.),
+        #              (-0.5, 1.5), 'k--')
+        #     plt.plot((wranges[i][1]*10000., wranges[i][1]*10000.),
+        #              (-0.5, 1.5), 'b--')
 
         # plt.plot(spectrum.wavelength.flatten(), spectrum.flux.flatten(), 'g-')
         # plt.xlabel('Wavelength in microns')
@@ -522,6 +522,7 @@ class Spectrum(object):
 
         wranges = []
         wrange_h2o = [1.10, 1.12]
+        # wrange_h2o = [1.18, 1.20]
         wrange2_h2o = [1.34, 1.36]
         wrange_o2 = [1.26, 1.29]
         wrange_co2 = [1.56, 1.64]
@@ -550,12 +551,14 @@ class Spectrum(object):
         # Creates an input file readable for Molecfit
         if any([wl.size == 0, flux.size == 0]):
             # Bin Table with data
+            print 'I am using the original FITS file'
             tb_hdu = fits.BinTableHDU.from_columns(
                 [fits.Column(name='WAVE', format='1D', array=self.wavelength.flatten()),
                  fits.Column(name='SPEC', format='1D', array=self.flux.flatten()),
                  fits.Column(name='CONT', format='1D', array=self.cont.flatten()),
                  fits.Column(name='SIG', format='1D', array=self.non_corr_flux.flatten())])
         else:
+            print 'I am using wl and flux corrected'
             tb_hdu = fits.BinTableHDU.from_columns(
                 [fits.Column(name='WAVE', format='1D', array=wl),
                  fits.Column(name='SPEC', format='1D', array=flux),
@@ -571,35 +574,105 @@ class Spectrum(object):
 
         return None
 
+    def extract_range(wl, flux, wl_start, wl_end):
+        """
+        Finds closest values to the wl_start and wl_end
+        and return this range for the wl and the flux
+        """
+        idx_start = np.argmin(np.abs(wl_start - wl))
+        idx_end = np.argmin(np.abs(wl_end - wl))
+
+        return wl[idx_start:idx_end], flux[idx_start:idx_end]
+
 if __name__ == "__main__":
 
     # Create Spectrum object from filename
-    t0 = time.time()
-    
+    # t0 = time.time()
+
     filename = 'car-20160420T20h45m44s-sci-cabj-nir_A.fits'
-    filename2 = 'car-20160420T20h26m49s-sci-cabj-nir_A.fits'
+    # filename2 = 'car-20160420T20h26m49s-sci-cabj-nir_A.fits'
 
     spectrum10 = Spectrum.from_file(filename)
-    spectrum11 = Spectrum.from_file(filename2)
+    # spectrum11 = Spectrum.from_file(filename2)
 
     # Mask the overlaps
     wavelength_masked, flux_masked, nb_overlaps, mask = Spectrum.mask_overlap_rgn(spectrum10)
 
-    # Correct the overlaps
+    # # Correct the overlaps
     wl, flux = Spectrum.treat_overlap(spectrum10, wavelength_masked, flux_masked, nb_overlaps)
 
-    t1 = time.time()
-    
-    print 'Time for correcting overlap', t1-t0
-    # Delete artefact on the full spectrum
-    #wl_corr, flux_corr = suppress_artefact(wl, flux)
+    # t1 = time.time()
 
-    # Create input FITS file for Molecfit
-    #Spectrum.input_molecfit(spectrum10, wl_corr, flux_corr)
+    # print 'Time for correcting overlap', t1-t0
+    # # Delete artefact on the full spectrum
+    wl_corr, flux_corr = suppress_artefact(wl, flux)
 
-    # Create exclusion mask for Molecfit
-    #Spectrum.wrange_exclude(spectrum10, wl_corr, flux_corr)
+    # # Create input FITS file for Molecfit
+    # Spectrum.input_molecfit(spectrum10, wl_corr, flux_corr)
 
-    # Create inclusion mask for Molefit
-    # to fit by default H2O and CO2, O2 and CH4 can also be included
-    #Spectrum.wrange_include(spectrum10)
+    # # Create exclusion mask for Molecfit
+    # Spectrum.wrange_exclude(spectrum10, wl_corr, flux_corr)
+
+    # # Create inclusion mask for Molefit
+    # # to fit by default H2O and CO2, O2 and CH4 can also be included
+    # Spectrum.wrange_include(spectrum10, h2o=True, o2=False, co2=False, ch4=False)
+
+    # Plotting
+    plt.figure(1)
+    for i in range(5):
+        plt.plot(spectrum10.wavelength[i], spectrum10.flux[i], 'k--', label='Separated orders 1D spectrum')
+    plt.legend()
+
+    plt.subplot(212)
+    plt.plot(wl_corr, flux_corr, 'm.-', label='Full 1D spectrum')
+    plt.legend()
+
+    plt.figure(2)
+    plt.subplot(311)
+    plt.title('Merging CARMENES 1D orders')
+    plt.plot(spectrum10.wavelength[0], spectrum10.flux[0], 'b-', label='Order 0')
+    plt.plot(spectrum10.wavelength[1], spectrum10.flux[1], 'g-', label='Order 1')
+    plt.plot(wl_corr, flux_corr, 'm-', label='Merged spectrum')
+    plt.axis([9757, 9784, 0.1, 0.75])
+    plt.legend(loc='lower right')
+
+    plt.subplot(312)
+    plt.ylabel('Normalized Flux')
+    plt.plot(spectrum10.wavelength[1], spectrum10.flux[1], 'g-', label='Order 1')
+    plt.plot(spectrum10.wavelength[2], spectrum10.flux[2], 'y-', label='Order 2')
+    plt.plot(wl_corr, flux_corr, 'm-', label='Merged spectrum')
+    plt.axis([9917, 9941, 0.5, 0.85])
+    plt.legend(loc='lower right')
+
+    plt.subplot(313)
+    plt.xlabel('Wavelength (Angstrom)')
+    plt.plot(spectrum10.wavelength[2], spectrum10.flux[2], 'y-', label='Order 2')
+    plt.plot(spectrum10.wavelength[3], spectrum10.flux[3], 'c-', label='Order 3')
+    plt.plot(wl_corr, flux_corr, 'm-', label='Merged spectrum')
+    plt.axis([10083, 10104, 0.5, 0.8])
+    plt.legend(loc='lower right')
+
+    # PHOENIX Model
+    # # PHOENIX model for HD 79210
+    filename = '/home/solene/phoenix/WAVE_PHOENIX-ACES-AGSS-COND-2011.fits'
+    hdu = fits.open(filename)
+    wl_phoenix = hdu[0].data
+
+    filename = '/home/solene/phoenix/lte03900-4.50-0.0.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits'
+    hdu = fits.open(filename)
+    flux_phoenix = hdu[0].data
+
+    plt.figure(3)
+    plt.title('PHOENIX model for HD79210')
+    plt.plot(wl_phoenix, flux_phoenix)
+    plt.axis([10000, 15000, 0.1*1e14, 15.*1e14])
+
+    plt.plot(wl_corr, flux_corr*1e14, 'g.-', label='CARMENES spectrum')
+
+    # Save in txt file
+
+    path = "/home/solene/atmos/carmenes/wl_flux_carmenes.txt"
+    file = open(path, 'w+')
+    data = (np.array([wl_corr, flux_corr])).T  # transpose data, to have it in two columns
+    np.savetxt(file, data)
+    file.close()
